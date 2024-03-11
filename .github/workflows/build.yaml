@@ -1,0 +1,127 @@
+name: Build Java App
+run-name: Build ${{ github.ref_name }} (Triggered by ${{ github.event_name }})
+
+on:
+  push: 
+    branches:  [ 'main','version/**' ]
+  pull_request:
+    types:
+      - opened
+      - synchronize
+    workflow_dispatch:
+    inputs:
+      doSomeActionYesOrNo:
+        type: boolean
+        description: "🔗 Run chain reaction action"
+        default: true
+        required: true
+      publish:
+        type: boolean
+        description: "🌏 Do you want to push an image to a registery"
+        default: true
+        required: true
+  workflow_call:
+    inputs:
+      doSomeActionYesOrNo:
+        type: boolean
+        required: true
+      publish:
+        type: boolean
+        required: true
+    outputs:
+      imageTag:
+        description: "The output tag name that can be used as an input into a deploy workflow"
+        value: ${{ jobs.build.outputs.imageTag }}
+
+defaults:
+  run:
+    shell: bash
+
+
+
+env:
+  PROJECT_KEY: java-application
+  PUBLISH: ${{ inputs.publish == true }}
+
+  DOCKER_REGISTRY: aws-ecr-images-port:90901
+  DOCKER_REGISTRY_PULL: aws-ecr-images-port:90902
+
+concurrency:
+  # this just ensures we aren't duplicating jobs
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.sha }}
+
+jobs:
+  Build:
+    name: Building
+    runs-on: Linux
+    outputs:
+      imageTag: ${{ steps.image_tag_output.outputs.imageTag }}
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Run build and test
+        uses: ./.github/workflows/build
+        with:
+          input1: ${{ secrets.some_user}}
+          input2: ${{ secrets.some_password}}
+
+      - name: Set Build date and time
+        run: echo "BUILD_TIMESTAMP=$(date +'%Y-%m-%d_%H:%M:%S_UTC')" >> $GITHUB_ENV
+
+      - name: Generate Docker image tag
+        if: env.IMAGE_TAG == ''
+        run: |
+          application_version=${{ env.APPLICATION_VERSION }}
+          stripped=${application_version//-SNAPSHOT}          
+          revision=$(git rev-parse --short "$GITHUB_SHA")
+          echo "IMAGE_TAG=$stripped-${{ github.run_number }}-$revision" >> $GITHUB_ENV
+          echo "imageTag=${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+
+      - name: Image tag output
+        id: image_tag_output
+        run: echo "imageTag=${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+
+      - name: Build and publish images
+        run: |
+          docker login -u ${{ENV.username}} -p ${{ENV.password}} ${{ENV.DOCKER_REGISTRY_PULL}}
+          export BRANCH_NAME=${{github.ref_name}}    
+          docker compose -f docker-compose.yml build
+
+          docker login -u ${{ ENV.username }} -p ${{ ENV.password }} ${{ ENV.DOCKER_REGISTRY }}
+          docker push ${{ ENV.DOCKER_REGISTRY }}/application-registry/${{ENV.projectKey}}:${{ ENV.imageTag }}
+
+      - name: Delete existing GitHub tag
+        uses: actions/github-script@v7
+        if: ${{ env.PUBLISH == 'true' }}
+        continue-on-error: true
+        with:
+          script: |
+            github.rest.git.deleteRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: 'tags/${{ env.IMAGE_TAG }}'
+            })
+
+      - name: Create GitHub tag
+        uses: actions/github-script@v7
+        if: ${{ env.PUBLISH == 'true' }}
+        with:
+          script: |
+            github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: 'refs/tags/${{ env.IMAGE_TAG }}',
+              sha: context.sha
+            })
+
+      - name: Summary
+        uses: ./.github/workflows/summary
+        with:
+          image_tag: ${{ env.IMAGE_TAG }}
+          ref_name: ${{ github.ref_name }}
+          published: ${{ env.PUBLISH }}
+          runSonar: ${{ env.RUN_SONAR }}
+          runDependencyCheck: ${{ env.RUN_DEPENDENCY_CHECK }}
+
