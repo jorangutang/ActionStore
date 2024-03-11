@@ -13,16 +13,20 @@ This repo contains some of the many GitHub actions I have worked on. You can add
       - cron: '0 0 1 1 *'
 3. you can store files in your shared actions folders, such as python scripts, Dockerfiles, textiles, JSON etc
   This is super useful for storing property files
-    eg. runs:
-          using: 'docker'
-          image: 'Dockerfile'
+    eg.
+   ```bash
+   runs:
+    using: 'docker'
+    image: 'Dockerfile'
+```
   and in the dockerfile you could have something like this:
-   "FROM python:3.8.3-alpine
+```bash
+   FROM python:3.8.3-alpine
    COPY . /
    RUN pip install -r requirements.txt
    ENTRYPOINT [ "python" ]
-   CMD [ "/main.py" ] "
-
+   CMD [ "/main.py" ]
+```
   that runs a python script which runs a server, you could have a timeout at the end or just kill it.
 
 5. 
