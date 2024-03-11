@@ -1,0 +1,38 @@
+name: build run tests and sonar
+description: Contains all the steps necessary to build the project
+
+inputs:
+  maven-username:
+    description: 'username used to authenticate against the repositories'
+    required: true
+  maven-password:
+    description: 'password used to authenticate against the repositories'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+
+    - name: Set up JDK 8
+      uses: actions/setup-java@v3
+      with:
+        java-version: '8'
+        distribution: 'corretto'
+        cache: 'maven'
+
+    - name: Set up Maven
+      uses: stCarolas/setup-maven@v4.5
+      with:
+        maven-version: 3.6.3
+
+    - name: Set up Docker compose
+      uses: RSPCI/setup-docker-compose@init
+      with:
+        version: v2.3.3
+
+    - name: Maven build and tests
+      uses: RSPCI/maven-build-test@0.1.1
+      with:
+        project: proxy
+        maven-username: ${{ inputs.maven-username }}
+        maven-password: ${{ inputs.maven-password }}
