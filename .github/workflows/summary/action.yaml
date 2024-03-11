@@ -1,0 +1,51 @@
+name: Summary
+description: A nice github summary at the end of an actions
+
+inputs:
+  image_tag:
+    description: Image tag that has been built
+    required: false
+  ref_name:
+    description: Branch name
+    required: true
+  published:
+    description: Whether image has been published
+    required: true
+  someOtherBoolean:
+    description: Whether the bla bla check was run
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+
+    - name: Build Summary
+      shell: bash
+      run: |
+        cat <<EOF >> "$GITHUB_STEP_SUMMARY"
+        ### 📦 Build Summary
+        
+        - ${{ inputs.someOtherBoolean == 'true' && '🟢' || '⚪' }} The bla bla run: ${{ inputs.someOtherBoolean == 'true' && 'run' || 'skipped' }}
+        - 🟢 Successfully built \`${{ inputs.ref_name }}\` with 🏷 **image tag**: 
+        \`\`\`
+        ${{ inputs.image_tag }}
+        \`\`\`
+        EOF
+
+    - name: Deployment Hint (published)
+      shell: bash
+      if: ${{ inputs.published == 'true' }}
+      run: |
+        cat <<EOF >> $GITHUB_STEP_SUMMARY
+        ### 🚀 Deployment
+        Run [Deploy](../../actions/workflows/deploy.yaml) workflow with above 🏷 **image tag** selected from tag list
+        EOF
+
+    - name: Deployment Hint (not published)
+      shell: bash
+      if: ${{ inputs.published == 'false' }}
+      run: |
+        cat <<EOF >> $GITHUB_STEP_SUMMARY
+        ### 🚀 Deployment
+        ️Image not published for deployment
+        EOF
