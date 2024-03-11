@@ -6,7 +6,10 @@ This repo contains some of the many GitHub actions I have worked on. You can add
 ### 3. Deploy that image from a tag!
 
 ## NOTE:
-1. The runners will likely need to be changed to: 'runs-on: ubuntu-latest'
+1. The runners will likely need to be changed to: 
+```bash
+'runs-on: ubuntu-latest'
+```
 2. If you want to schedule an action, like a test to run once a year, use cron:
 ```bash
   on:
