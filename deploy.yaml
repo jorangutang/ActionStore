@@ -1,0 +1,103 @@
+name: Deploy
+run-name: Deploy ${{ github.ref_name }} to ${{ inputs.environment }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to:'
+        type: environment
+        default: dev
+        required: true
+      confirmProdDeployment:
+        type: boolean
+        description: "⚠️ Click here to confirm PROD deployment"
+        default: false
+        required: true
+  workflow_call:
+    inputs:
+      imageTag:
+        type: string
+        required: true
+      environment:
+        type: string
+        required: true
+      confirmProdDeployment:
+        type: boolean
+        default: false
+
+env:
+  PROJECT_KEY: my-application
+  DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+  IMAGE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.imageTag }}
+
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: deploy-${{ inputs.environment }}  # only one deployment per environment at a time
+  cancel-in-progress: ${{ github.ref_name != 'main' && !startsWith(github.ref_name, 'release') && !startsWith(github.ref_name, 'hotfix') }}
+
+jobs:
+  Deploy:
+    name: Deploying to ${{ inputs.environment }}
+    runs-on: [self-hosted, Linux]
+    environment:
+      name: ${{ inputs.environment }}
+
+    steps:
+
+      - name: Check version tag input
+        if: env.IMAGE_TAG == ''
+        run: |
+          echo "ERROR: Expecting a GitHub tag as input, not '${{ github.ref_type }}'. Start workflow from tag list!"
+          exit 1
+
+      - name: PROD deployment safety check
+        if: inputs.environment == 'prod' && inputs.confirmProdDeployment == false
+        run: |
+          echo "Environment PROD has been selected, but the confirmation checkmark had not been set. exiting."
+          exit 1
+
+      - name: Check proper release tag
+        if: inputs.environment == 'prod' && startsWith(env.IMAGE_TAG, 'dev-')
+        run: |
+          echo "Do not deploy a dev tag to PROD, it may change!"
+          exit 1
+
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_DEFAULT_REGION }}
+
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          java-version: 21
+          distribution: 'corretto'
+          cache: 'maven'
+
+      #  - name: Set up Maven
+      #  uses: ./.github/workflows/setup-maven
+      #   with:
+      #      maven-username: ${{ secrets.MAVEN_USERNAME }}
+      #      maven-password: ${{ secrets.MAVEN_PASSWORD }}
+
+      # needed if deploying to kubernetes
+      - name: Setup up Kubectl
+        uses: azure/setup-kubectl@v3
+        id: install
+
+      # here you might have another actions that can perform database changes, ie. run flyway scripts atc 
+
+      - name: EKS Setup and Rollout
+        run: |
+        # use kubectl to create the config maps and roll out the application 
+        # here you can roll out multiple instances with different resource configurations.
